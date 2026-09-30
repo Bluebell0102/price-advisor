@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="head">
+  <div>
+    <h1>导入</h1>
+    <p class="sub">商品表、销售日记录、竞品价格（可选）三张 CSV。任何一行出错整批不导，不留半份。</p>
+  </div>
+</div>
+{% if result %}
+  {% if result.status == '成功' %}
+  <div class="notice"><span class="grow">上次导入成功，已校验 {{ result['rows'] }} 行。</span><a href="/report?log={{ result.id }}">去看体检报告 →</a></div>
+  {% else %}
+  <div class="card flush" style="margin-bottom: 20px">
+    <div class="card-head risk">
+      {% set n_err = result['issues'] | selectattr('hard') | list | length %}{% set n_hint = result['issues'] | length - n_err %}
+      <strong>已校验 {{ result['rows'] }} 行。这批文件没有导入：{{ n_err }} 处错误{% if n_hint %}，另有 {{ n_hint }} 条提示{% endif %}，改好错误后重新上传</strong>
+      <a class="btn sm" href="/import/issues/{{ result.id }}.csv">下载错误清单</a>
+    </div>
+    <table>
+      <thead><tr><th>级别</th><th>表</th><th class="num">行号</th><th>原因</th></tr></thead>
+      <tbody>
+      {% for i in result['issues'] %}
+      <tr class="{{ 'err' if i.hard else 'hint' }}"><td>{% if i.hard %}<span class="badge b-near">错误</span>{% else %}<span class="badge b-short">提示</span>{% endif %}</td><td>{{ i.table }}</td><td class="num line">{{ i.line }}</td><td>{{ i.reason }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+{% endif %}
+<div class="import-grid">
+  <div class="card">
+    <div class="section-title"><h2>① 下载模板</h2><span class="hint">UTF-8 或 GBK 都行</span></div>
+    <div class="tpl"><div class="icon">CSV</div><div class="txt"><b>商品表</b><span>编号、名称、类目、上架日期、售价、成本价、库存</span></div><a class="btn sm" href="/templates/商品表.csv">下载</a></div>
+    <div class="tpl"><div class="icon">CSV</div><div class="txt"><b>销售日记录</b><span>按日按商品；访客数、广告花费、广告成交可空</span></div><a class="btn sm" href="/templates/销售日记录.csv">下载</a></div>
+    <div class="tpl"><div class="icon">CSV</div><div class="txt"><b>竞品价格</b><span>可选，每个商品 2 到 5 个</span></div><a class="btn sm" href="/templates/竞品价格.csv">下载</a></div>
+  </div>
+  <form class="card" method="post" action="/import" enctype="multipart/form-data" data-busy="正在校验…">
+    <div class="section-title"><h2>② 上传</h2><span class="hint">点框或把文件拖进框里</span></div>
+    <div class="drops">
+      <label class="drop"><input type="file" name="products" accept=".csv"><span class="t">商品表</span><span class="req">第一次必传；之后改了再传</span><span class="file empty">未选择文件</span></label>
+      <label class="drop"><input type="file" name="sales" accept=".csv"><span class="t">销售日记录</span><span class="req">每周导一次，同一天按编号 + 日期覆盖</span><span class="file empty">未选择文件</span></label>
+      <label class="drop"><input type="file" name="competitors" accept=".csv"><span class="t">竞品价格</span><span class="req">可选</span><span class="file empty">未选择文件</span></label>
+    </div>
+    <div class="savebar" style="position: static; border-top: 0; padding-bottom: 0">
+      <button class="btn primary lg" type="submit">上传</button>
+      <span class="muted">第一次导入后会先让你确认店铺参数。</span>
+    </div>
+  </form>
+</div>
+<div class="rules">
+  <div class="rule"><b>重复上传会覆盖</b>商品按编号覆盖，销售按「编号 + 日期」覆盖，提示覆盖了多少行。</div>
+  <div class="rule"><b>缺成本价不拦</b>照常导入，标「数据不足」，在总览里补录。</div>
+  <div class="rule"><b>不含身份信息</b>表里不要有店名、买家、收货信息；商品名可以用编号代替。</div>
+</div>
+{% endblock %}

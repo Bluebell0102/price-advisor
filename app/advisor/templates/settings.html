@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="head">
+  <div>
+    {% if first %}<div class="eyebrow">第一次导入完成</div>{% endif %}
+    <h1>设置</h1>
+    <p class="sub">{% if first %}先确认店铺参数，保存后进入体检报告。{% else %}改任何一项，保存后全店重算，旧结果标「已过期」。{% endif %}</p>
+  </div>
+  <div class="actions"><a class="btn" href="/settings/log">变更日志</a></div>
+</div>
+{% if saved %}<div class="notice"><span class="grow">已保存 {{ saved }} 处改动，已全店重算。</span><a href="/settings/log">看变更日志 →</a></div>{% endif %}
+{% if errors %}<div class="errors"><strong>没有保存，请改正：</strong><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+{% set units = {'pct': '%', 'money': '元', 'int': '天'} %}
+{% set groups = [('店铺', ['平台']), ('费用与退货', ['扣点率', '单件履约费', '退货率', '单次退货净损失占比']), ('毛利与清仓', ['最低毛利率', '尾货期最低毛利率', '目标清仓天数', '滞销线'])] %}
+{% set flabel = {} %}{% for key, label, kind in fields %}{% set _ = flabel.update({key: (label, kind)}) %}{% endfor %}
+<form method="post" action="/settings">
+  <input type="hidden" name="first" value="{{ first }}"><input type="hidden" name="log" value="{{ log or '' }}">
+  <div class="settings">
+    <div>
+      {% for title, keys in groups %}
+      <div class="card">
+        <div class="section-title"><h2>{{ title }}</h2>{% if title == '费用与退货' %}<span class="hint">决定保本价</span>{% endif %}</div>
+        <div class="fields">
+          {% if title == '店铺' %}
+          <div class="field"><label for="store_name">店铺名称（只显示在本机）</label><input id="store_name" type="text" name="store_name" value="{{ store_name_value }}"></div>
+          {% endif %}
+          {% for key in keys %}{% set label, kind = flabel[key] %}
+          <div class="field">
+            <label for="f-{{ key }}">{{ label }}</label>
+            {% if kind == 'choice' %}
+            <select id="f-{{ key }}" name="{{ key }}" data-rates='{{ platform_rates | tojson }}'>
+              {% for opt in platform_rates %}<option {{ 'selected' if values[key] == opt else '' }}>{{ opt }}</option>{% endfor %}
+            </select>
+            <div class="help">换平台会把扣点率填成该平台的默认值，仍可手改</div>
+            {% else %}
+            <span class="ig"><input id="f-{{ key }}" type="text" name="{{ key }}" value="{{ values[key] }}" inputmode="decimal"><span class="unit">{{ units[kind] }}</span></span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% if title == '费用与退货' %}
+        <div class="formula" style="margin-top: 16px">保本价分母 = 1 − 扣点率 − 退货率 × 单次退货净损失占比 = <b id="denominator">—</b><br>保本价 =（成本价 + 单件履约费 + 单件广告成本）÷ 分母</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="card">
+      <div class="section-title"><h2>类目弹性</h2><span class="hint">价格每变 1%，转化率变几 %</span></div>
+      <p class="muted" style="margin: 0 0 12px; font-size: 12px">基准默认取类目先验（PRD 附录 A），门 0 校准后可改成校准值。微调 ±{{ (params['弹性微调上限'] * 100) | int }}%，生效值 = 基准 ×（1 + 微调），必须在 {{ params['弹性硬限'][0] }} 到 {{ params['弹性硬限'][1] }} 之间。</p>
+      {% if elastic %}
+      <table class="el-table">
+        <thead><tr><th>类目</th><th>基准弹性</th><th>微调</th><th class="num">生效值</th></tr></thead>
+        <tbody>
+        {% for e in elastic %}
+        <tr><td><strong>{{ e['类目'] }}</strong><div class="muted" style="font-size: 11px">先验 {{ '%.2f' % e['先验'] }}</div></td>
+          <td><span class="ig"><input type="text" name="el_base_{{ loop.index0 }}" value="{{ e['基准输入'] }}" aria-label="{{ e['类目'] }} 基准弹性"></span></td>
+          <td><span class="ig"><input type="text" name="el_adj_{{ loop.index0 }}" value="{{ e['微调输入'] }}" aria-label="{{ e['类目'] }} 微调"><span class="unit">%</span></span></td>
+          <td class="num strong">{{ '%.2f' % e['生效'] }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="muted">导入商品后按类目列出。</p>{% endif %}
+    </div>
+  </div>
+  <div class="savebar">
+    <button class="btn primary lg" type="submit">{{ '确认并进入体检报告' if first else '保存并重算' }}</button>
+    <span class="muted">保存后全店重算，旧结果标「已过期」，改动记进变更日志。</span>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="head">
+  <div>
+    <h1>体检报告</h1>
+    <p class="sub">全店一张表：该动价的商品占多少、库存压了多少。与门 0 体检同一套算法，占比的分母是非数据不足的商品。</p>
+  </div>
+  {% if has_data %}<div class="actions"><a class="btn" href="/export/detail.csv">导出计算明细</a><a class="btn" href="/export/adoptions.csv">导出采纳记录</a><a class="btn" href="/export/gate1.csv">导出门 1 评估</a></div>{% endif %}
+</div>
+{% if banner %}<div class="notice"><span class="grow">{{ banner }}</span><span class="chip">已校验 {{ result['rows'] }} 行</span></div>{% endif %}
+{% if kept %}<div class="notice hint"><span class="grow">导入时空格保留原值：{{ kept | join('；') }}</span></div>{% endif %}
+{% if hints %}<div class="notice hint"><span class="grow">{{ hints | length }} 条提示：{{ hints | join('；') }}</span></div>{% endif %}
+{% if not has_data %}
+<div class="notice hint"><span class="grow">还没有数据。</span><a href="/import">先导入 →</a></div>
+{% else %}
+<div class="stats three">
+  <div class="stat"><div class="label">商品</div><div class="value">{{ n }}<small>个</small></div><div class="foot">其中 {{ insufficient }} 个数据不足，不进占比分母（分母 {{ m['分母'] }}）</div></div>
+  <div class="stat"><div class="label">销售记录</div><div class="value">{{ cnt['天'] }}<small>天</small></div><div class="foot">共 {{ cnt['销售行'] }} 行</div></div>
+  <div class="stat"><div class="label">数据截至</div><div class="value" style="font-size: 22px">{{ stat['今天'] }}</div><div class="foot">全店销售记录的最后一天</div></div>
+</div>
+
+<div class="card flush">
+  <div class="card-head"><strong>体检指标</strong><span class="muted">名称与口径同 MRD 2.2</span></div>
+  <table>
+    <thead><tr><th>指标</th><th>算法</th><th>判据</th><th class="num">结果</th><th>明细</th></tr></thead>
+    <tbody>
+    {% for x in m['指标'] %}
+    <tr><td><strong>{{ x['指标'] }}</strong></td><td class="muted">{{ x['算法'] }}</td>
+      <td>{% if x.get('达标') is sameas true %}<span class="badge b-ok">{{ x['判据'] }} · 达标</span>{% elif x.get('达标') is sameas false %}<span class="badge b-short">{{ x['判据'] }} · 未达标</span>{% else %}<span class="muted">{{ x['判据'] }}</span>{% endif %}</td>
+      <td class="num strong">{{ x['结果'] }}</td><td class="muted">{{ x['明细'] }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="dist">
+  <div class="card">
+    <div class="section-title"><h2>健康度分布</h2><span class="hint">全部 {{ n }} 个商品</span></div>
+    {% set total = n or 1 %}
+    {% for k, v in m['健康度'].items() %}
+    <div class="bar-row"><span class="bar-label">{% set r = {'建议': {'健康度': k}} %}{% include "_health.html" %}</span>
+      <span class="bar"><i class="fill {{ 'fill-risk' if k == '贴近成本' else 'fill-dash' if k == '数据不足' else '' }}" style="width: {{ (v / total * 100) | round(1) }}%"></i></span><b class="bar-n">{{ v }}</b></div>
+    {% endfor %}
+  </div>
+  <div class="card">
+    <div class="section-title"><h2>库存天数分布</h2><span class="hint">非数据不足的商品，无动销单列</span></div>
+    {% set total2 = (m['库存天数'].values() | sum) or 1 %}
+    {% for k, v in m['库存天数'].items() %}
+    <div class="bar-row"><span class="bar-label">{{ k }}</span>
+      <span class="bar"><i class="fill {{ 'fill-risk' if k == '90 天以上' else 'fill-dash' if k == '无动销' else '' }}" style="width: {{ (v / total2 * 100) | round(1) }}%"></i></span><b class="bar-n">{{ v }}</b></div>
+    {% endfor %}
+    <p class="foot-note">改价事件共 {{ m['改价事件'] }} 个，涉及 {{ m['有事件的SKU'] }} 个商品。</p>
+  </div>
+</div>
+
+<div class="card flush" style="margin-top: 20px">
+  <div class="card-head"><strong>弹性校准</strong>
+    <span class="row" style="gap: 8px"><span class="muted">类目改价事件 ≥ 3 个才用本店校准，否则用先验</span>
+      <a class="btn sm" href="/export/events.csv">导出改价事件</a><a class="btn sm" href="/export/simulation.csv">导出模拟推演</a></span></div>
+  <table>
+    <thead><tr><th>类目</th><th class="num">有效事件数</th><th class="num">事件中位数</th><th class="num">校准误差</th><th class="num">先验</th><th class="num">采用弹性</th><th>来源</th></tr></thead>
+    <tbody>
+    {% for c in m['类目弹性'] %}
+    <tr><td><strong>{{ c['类目'] }}</strong></td><td class="num">{{ c['有效事件数'] }}</td>
+      <td class="num">{{ '%.2f' % c['事件中位数'] if c['事件中位数'] is not none else '—' }}</td>
+      <td class="num">{{ c['校准误差'] | pct(False, 0) if c['校准误差'] is not none else '—' }}</td>
+      <td class="num">{{ '%.2f' % c['先验'] }}</td><td class="num strong">{{ '%.2f' % c['生效'] }}</td><td class="muted">{{ c['来源'] }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if m['事件'] %}
+  <table style="border-top: 1.5px solid var(--pale)">
+    <thead><tr><th>改价事件</th><th>类目</th><th>改价日</th><th class="num">旧价 → 新价</th><th>口径</th><th class="num">弹性</th><th class="num">剔除活动日</th><th>备注</th></tr></thead>
+    <tbody>
+    {% for e in m['事件'] %}
+    <tr><td><a href="/sku/{{ e['商品编号'] }}">{{ e['商品编号'] }}</a></td><td>{{ e['类目'] }}</td><td>{{ e['改价日'] }}</td>
+      <td class="num">{{ e['旧价'] | money }} → {{ e['新价'] | money }}</td><td>{{ e['口径'] }}</td>
+      <td class="num strong">{{ '%.2f' % e['弹性'] if e['弹性'] is not none else '—' }}</td><td class="num">{{ e['剔除活动日'] }}</td><td class="muted">{{ e['备注'] or '—' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+<p class="foot-note">模拟推演只供导出查看，所有数字都带「模拟」标记，不进本页、总览或单品页的任何指标。</p>
+{% endif %}
+{% endblock %}

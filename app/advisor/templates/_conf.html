@@ -1,0 +1,1 @@
+{% set cf = (r['建议'] or {}).get('置信度') %}<span class="conf"><i class="dot {{ {'高': 'd-high', '中': 'd-mid', '低': 'd-low'}[cf] }}"></i>{{ cf }}</span>

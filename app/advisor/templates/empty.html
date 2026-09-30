@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block body %}
+<section class="empty">
+  <div class="mark">¥</div>
+  <h1>还没有数据</h1>
+  <p class="sub">导入自己店里的三张表，就能看到每个商品的保本价、毛利率和库存天数。工具只给建议，不会改你的售价。</p>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><b>从后台导出</b><span>近 90 天按日按商品的成交记录、商品列表、成本</span></div>
+    <div class="step"><div class="n">2</div><b>按模板整理</b><span>列名和模板不一样也行，上传时确认一次对应关系</span></div>
+    <div class="step"><div class="n">3</div><b>上传并确认参数</b><span>第一次导入后确认扣点率、履约费、退货损耗</span></div>
+  </div>
+  <a class="btn lg" href="/import">导入数据</a>
+  <p class="tpl-links">下载模板：
+    <a href="/templates/商品表.csv">商品表</a> ·
+    <a href="/templates/销售日记录.csv">销售日记录</a> ·
+    <a href="/templates/竞品价格.csv">竞品价格（可选）</a>
+  </p>
+</section>
+{% endblock %}

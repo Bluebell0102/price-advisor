@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="head">
+  <div>
+    <h1>确认列名</h1>
+    <p class="sub">你的列名和模板不一样。确认一次对应关系，下次同样的列名不再询问。</p>
+  </div>
+</div>
+<form method="post" action="/import/mapping" data-busy="正在导入…">
+  <input type="hidden" name="token" value="{{ token }}">
+  {% for tbl, t in tables.items() %}
+  <div class="card flush">
+    <div class="card-head"><strong>{{ tbl }}</strong>
+      {% if t.missing %}<span class="badge b-short">还没对上：{{ t.missing | join('、') }}</span>{% else %}<span class="badge b-ok">必填列都已对上</span>{% endif %}</div>
+    <table>
+      <thead><tr><th>你的列名</th><th>对应到模板列</th><th>状态</th></tr></thead>
+      <tbody>
+      {% for h in t.head %}
+      <tr><td><strong>{{ h }}</strong></td><td>
+        <select name="map|{{ tbl }}|{{ h }}" aria-label="{{ h }} 对应">
+          <option value="{{ ignore }}">{{ ignore }}</option>
+          {% for c in t.cols %}<option value="{{ c }}" {{ 'selected' if t.guess.get(h) == c else '' }}>{{ c }}</option>{% endfor %}
+        </select>
+      </td><td>{% if t.guess.get(h) == h %}<span class="muted">同名</span>{% elif t.guess.get(h) %}<span class="badge b-tag">已猜到，请确认</span>{% else %}<span class="muted">未识别</span>{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+  <div class="savebar"><button class="btn primary lg" type="submit">确认并导入</button><a class="btn lg" href="/import">取消</a></div>
+</form>
+{% endblock %}

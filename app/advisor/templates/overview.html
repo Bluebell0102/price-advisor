@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}健康度列表{% endblock %}
+{% block body %}
+<div class="head">
+  <div>
+    <h1>健康度列表</h1>
+    <p class="sub">回答「该动哪几个」。贴近成本永远置顶，其余按预计可增毛利排；点商品名看解释、试算与采纳。</p>
+  </div>
+  <div class="actions"><a class="btn" href="/export/detail.csv">导出计算明细</a></div>
+</div>
+{% if err %}<div class="notice risk">{{ err }}</div>{% endif %}
+{% if msg %}<div class="notice">{{ msg }}</div>{% endif %}
+<div class="stats">
+  <div class="stat"><div class="label">全店 SKU</div><div class="value">{{ v['total'] }}<small>个</small></div><div class="foot">其中 {{ v['短缺'] }} 个数据不足</div></div>
+  {% set need = v['需要动'] %}
+  <div class="stat {{ 'risk' if need['贴近成本'] else '' }}"><div class="label">需要动的 SKU</div><div class="value">{{ need.values() | sum }}<small>个</small></div>
+    <div class="foot">贴近成本 {{ need['贴近成本'] }} · 偏低 {{ need['偏低'] }} · 偏高 {{ need['偏高'] }}</div></div>
+  <div class="stat"><div class="label">预计可增毛利 / 14 天</div><div class="value">{{ v['可增毛利'] | money }}</div>
+    <div class="foot">按最优建议价采纳全部估算{% if v['可增毛利为负'] %}；其中 {{ v['可增毛利为负'] }} 个为清库存或冲销量、毛利下降{% endif %}</div></div>
+  <div class="stat"><div class="label">有改价事件的 SKU</div><div class="value">{{ v['有改价事件'] }}<small>个</small></div><div class="foot">弹性可校准 · 其余用类目先验</div></div>
+</div>
+<div class="filters">
+  <span class="muted">筛选：</span>
+  <a class="pill {{ 'on' if not v['f'] else '' }}" href="/?sort={{ v['sort'] }}">全部 {{ v['total'] }}</a>
+  {% for h in order %}<a class="pill {{ 'on' if v['f'] == h else '' }}" href="/?f={{ h | urlencode }}&sort={{ v['sort'] }}">{{ h }} {{ v['counts'][h] }}</a>{% endfor %}
+  <span class="grow"></span>
+  <span class="muted">排序：</span>
+  <form method="get" action="/" class="inline">
+    {% if v['f'] %}<input type="hidden" name="f" value="{{ v['f'] }}">{% endif %}
+    <select class="pill" name="sort" data-autosubmit aria-label="排序" style="max-width: none">
+      {% for k, label in sorts.items() %}<option value="{{ k }}" {{ 'selected' if v['sort'] == k else '' }}>{{ label }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+<div class="meta">
+  <span class="chip">数据截至 <b>{{ stat['今天'] }}</b></span>
+  <span class="chip">第 <b>{{ stat['版本'] }}</b> 版计算 · {{ stat['原因'] }} · {{ stat['时间'] | replace('T', ' ') }}</span>
+  {% if stat['上一版过期'] %}<span class="chip">第 {{ stat['上一版'] }} 版的 <b>{{ stat['上一版过期'] }}</b> 条结果已过期</span>{% endif %}
+  <span class="chip">当前显示 <b>{{ rows | length }}</b> 个</span>
+</div>
+<div class="card flush">
+<table>
+  <thead><tr>
+    <th>商品</th><th>生命周期</th><th class="num">当前价</th><th class="num">保本价</th><th class="num">毛利率</th>
+    <th class="num">库存天数</th><th>健康度</th><th>建议区间（最低～最优～最高）</th><th>置信度</th><th class="num">可增毛利 / 14 天</th><th>操作</th>
+  </tr></thead>
+  <tbody>
+  {% for r in rows %}
+  {% set s = r['建议'] or {} %}
+  <tr>
+    <td><a class="sku" href="/sku/{{ r['商品编号'] }}?back={{ back }}"><span class="name">{{ r['商品名称'] }}</span><span class="code">{{ r['商品编号'] }} · {{ r['类目'] }}</span></a></td>
+    <td>
+      <form class="inline" method="post" action="/sku/{{ r['商品编号'] }}/stage">
+        <input type="hidden" name="back" value="{{ here }}">
+        <select class="pill {{ 'manual' if r['生命周期来源'] == '店主标记' else '' }}" name="stage" data-autosubmit aria-label="{{ r['商品编号'] }} 生命周期">
+          <option value="" {{ 'selected' if r['生命周期来源'] == '自动' else '' }}>{{ r['生命周期'] if r['生命周期来源'] == '自动' else '改回自动' }}</option>
+          {% for st in stages %}<option value="{{ st }}" {{ 'selected' if r['生命周期来源'] == '店主标记' and r['生命周期'] == st else '' }}>{{ st }}（手动）</option>{% endfor %}
+        </select>
+      </form>
+    </td>
+    <td class="num money">{{ r['当前价'] | money(True) }}</td>
+    <td class="num">
+      {% if r['保本价'] is not none %}
+      <span class="stack"><span class="be money">{{ r['保本价'] | money }}</span>
+        {% if r['广告口径'] == '含广告' %}<span class="badge b-tag">含广告 {{ r['单件广告成本'] | money }}</span>{% endif %}</span>
+      {% else %}<span class="muted">缺成本价</span>{% endif %}
+    </td>
+    <td class="num">{{ r['毛利率'] | pct }}</td>
+    <td class="num">{{ r['库存天数'] | days }}</td>
+    <td>{% include "_health.html" %}{% if r['数据状态'] != '正常' %}<span class="reason">{{ r['数据不足原因'] }}</span>{% endif %}</td>
+    <td>{% if s.get('区间') %}<span class="range {{ 'weak' if s['置信度'] == '低' else '' }}">{{ s['区间'][0] | money }} ～ <b>{{ s['区间'][1] | money }}</b> ～ {{ s['区间'][2] | money }}</span>{% else %}<span class="muted">不出区间</span>{% endif %}</td>
+    <td>{% if s.get('置信度') %}{% include "_conf.html" %}{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td class="num">{% if s.get('可增毛利') is not none %}{{ s['可增毛利'] | money }}{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>
+      {% if r['成本价'] is none %}
+      <form class="inline" method="post" action="/sku/{{ r['商品编号'] }}/cost">
+        <input type="hidden" name="back" value="{{ here }}">
+        <span class="ig sm"><span class="pre">¥</span><input type="text" name="cost" placeholder="成本价" aria-label="{{ r['商品编号'] }} 成本价"><button class="btn sm" type="submit">补录成本</button></span>
+      </form>
+      {% elif s.get('区间') %}<a class="btn sm {{ 'primary' if loop.first else '' }}" href="/sku/{{ r['商品编号'] }}?back={{ back }}">查看建议</a>
+        {% if r['状态'] in ('已采纳', '已忽略', '已查看') %}<span class="status">{{ r['状态'] }}</span>{% endif %}
+      {% else %}<span class="muted">—</span>{% endif %}
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="11" class="muted" style="text-align: center; padding: 28px">这一档没有商品</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="foot-note">最低建议价不低于保本价 ×（1 + 最低毛利率）。可增毛利 =（最优价日毛利 − 当前价日毛利）× 14。低置信度的区间弱化为中蓝。生命周期可手动标记，标记优先于规则。</p>
+{% endblock %}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ active }}{% endblock %} · 定价参谋</title>
+<link rel="stylesheet" href="/static/style.css?v={{ asset_v() }}">
+<script src="/static/app.js?v={{ asset_v() }}" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="/"><span class="mark">¥</span>定价参谋</a>
+    <nav>
+      {% for name, href in [("总览", "/"), ("导入", "/import"), ("体检报告", "/report"), ("设置", "/settings")] %}
+      <a href="{{ href }}" class="{{ 'on' if active == name else '' }}">{{ name }}</a>
+      {% endfor %}
+    </nav>
+    <span class="store">{{ store_name }}</span>
+    <a class="btn primary" href="/import">导入数据</a>
+  </div>
+</header>
+<main class="wrap">
+{% block body %}{% endblock %}
+</main>
+</body>
+</html>

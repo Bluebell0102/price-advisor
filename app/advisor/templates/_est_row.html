@@ -1,0 +1,2 @@
+<tr><td>{{ x['指标'] }}</td><td class="num">{{ x['当前'] }}</td><td class="num">{{ x['建议'] }}</td>
+<td class="num">{% if x['好坏'] is sameas true %}<span class="up">{{ x['变化'] }}</span>{% elif x['好坏'] is sameas false %}<span class="down">{{ x['变化'] }}</span>{% elif x['变化'] in ('未计', '无访客数') %}<span class="unk">{{ x['变化'] }}</span>{% else %}<span class="muted">{{ x['变化'] }}</span>{% endif %}</td></tr>

@@ -1,0 +1,1 @@
+{% set h = (r['建议'] or {}).get('健康度') %}{% if h == '贴近成本' %}<span class="badge b-near">贴近成本</span>{% elif h == '偏低' %}<span class="badge b-low">偏低</span>{% elif h == '偏高' %}<span class="badge b-high">偏高</span>{% elif h == '合理' %}<span class="badge b-ok">合理</span>{% else %}<span class="badge b-short">数据不足</span>{% endif %}

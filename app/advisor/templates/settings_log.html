@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="head">
+  <div><h1>设置变更日志</h1><p class="sub">每次保存的改动：时间、字段、旧值、新值。</p></div>
+  <div class="actions"><a class="btn" href="/settings">← 回设置</a></div>
+</div>
+{% if rows %}
+<div class="card flush">
+<table>
+  <thead><tr><th>时间</th><th>字段</th><th>旧值</th><th>新值</th></tr></thead>
+  <tbody>{% for r in rows %}<tr><td class="muted">{{ r['at'] | replace('T', ' ') }}</td><td><strong>{{ r['field'] }}</strong></td><td>{{ r['old'] }}</td><td>{{ r['new'] }}</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<div class="notice hint">还没有改过设置。</div>{% endif %}
+{% endblock %}

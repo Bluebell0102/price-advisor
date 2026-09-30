@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}{{ r['商品名称'] }}{% endblock %}
+{% block body %}
+<p style="margin: 0 0 10px"><a href="{{ back }}">← 返回列表</a></p>
+<div class="card sku-head">
+  <div>
+    <h1>{{ r['商品名称'] }} <span class="muted" style="font-size: 14px; font-weight: 400">· 编号 {{ r['商品编号'] }}</span></h1>
+    <p class="sub" style="margin: 4px 0 0">{{ r['类目'] }} · 上架 {{ r['上架天数'] }} 天 · 库存 {{ r['库存'] | int }} 件 · 近 30 天日均 {{ r['近30天日均'] | round(1) | string | replace('.0', '') }} 件 · 库存天数 {{ r['库存天数'] | days }}</p>
+  </div>
+  <div class="actions" style="align-items: center">
+    <span class="badge b-tag">{{ r['生命周期'] }}{% if r['生命周期来源'] == '店主标记' %}（手动）{% endif %}</span>
+    {% include "_health.html" %}
+    {% if s.get('置信度') %}<span class="badge b-tag">{% include "_conf.html" %}</span>{% endif %}
+    <span class="status-chip">{{ r['状态'] }}</span>
+  </div>
+</div>
+{% if err %}<div class="notice risk">{{ err }}</div>{% endif %}
+{% if msg %}<div class="notice">{{ msg }}</div>{% endif %}
+{% if r['状态说明'] %}<div class="notice hint">{{ r['状态说明'] }}</div>{% endif %}
+
+{% if not s.get('区间') %}
+<div class="notice hint"><span class="grow">{{ (s.get('解释') or ['不出建议区间。'])[0] }}</span>
+  {% if r['成本价'] is none %}
+  <form class="inline" method="post" action="/sku/{{ r['商品编号'] }}/cost">
+    <input type="hidden" name="back" value="/sku/{{ r['商品编号'] }}?back={{ back_q }}">
+    <span class="ig sm"><span class="pre">¥</span><input type="text" name="cost" placeholder="成本价" aria-label="{{ r['商品编号'] }} 成本价"><button class="btn sm" type="submit">补录成本</button></span>
+  </form>{% endif %}
+</div>
+{% else %}
+<div class="sku3">
+  <div>
+    <div class="card">
+      <div class="section-title"><h2>价格</h2></div>
+      <div class="price-row">
+        <div><div class="label">当前价</div><div class="big">{{ r['当前价'] | money }}</div></div>
+        <div><div class="label">建议区间</div><div class="big {{ 'weak' if s['置信度'] == '低' else '' }}">{{ s['区间'][0] | money }} ～ {{ s['区间'][2] | money }}</div></div>
+      </div>
+      <div class="price-row" style="margin-top: 10px">
+        <div><span class="badge b-near">保本</span> <b class="money be-text">{{ r['保本价'] | money }}</b>
+          {% if r['广告口径'] == '含广告' %}<span class="badge b-tag">含广告 {{ r['单件广告成本'] | money }}</span>{% endif %}</div>
+        <div class="opt">最优建议价 {{ s['最优价'] | money }}</div>
+      </div>
+      <p class="foot-note">最低建议价已含保本线，再低就是亏钱。</p>
+    </div>
+    <div class="card">
+      <div class="section-title"><h2>价格滑块</h2><span class="hint">下限锁在保本价 ×（1 + 最低毛利率）</span></div>
+      <input id="slider" type="range" min="{{ s['候选下限'] }}" max="{{ s['候选上限'] }}" step="0.01" value="{{ s['最优价'] }}"
+             data-sku="{{ r['商品编号'] }}" aria-label="试算价格" style="width: 100%">
+      <div class="row" style="justify-content: space-between; font-size: 12px">
+        <span><b>{{ s['候选下限'] | money }}</b> 下限</span><span>试算价 <b id="slider-price" class="opt">{{ s['最优价'] | money }}</b></span><span>{{ s['候选上限'] | money }}</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title"><h2>预估对比</h2><span class="hint">日均；变好主蓝，变差藏青底</span></div>
+      <table class="est" id="try-table">
+        <thead><tr><th>指标</th><th class="num">当前 {{ r['当前价'] | money }}</th><th class="num" id="try-head">建议 {{ s['最优价'] | money }}</th><th class="num">变化</th></tr></thead>
+        <tbody>{% for x in rows %}{% include "_est_row.html" %}{% endfor %}</tbody>
+      </table>
+      <p class="foot-note">预计可增毛利（14 天）：<b>{{ s['可增毛利'] | money }}</b></p>
+    </div>
+  </div>
+  <div>
+    <div class="card">
+      <div class="section-title"><h2>日毛利随价格变化</h2><span class="hint">示意</span></div>
+      {% if curve %}{% set cv = curve %}
+      <svg viewBox="0 0 {{ cv['w'] }} {{ cv['h'] }}" width="100%" role="img" aria-label="日毛利曲线">
+        <defs><pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="7" stroke="#27478C" stroke-width="1.2"/></pattern></defs>
+        <rect x="{{ cv['left'] }}" y="{{ cv['top'] }}" width="{{ [cv['be_x'] - cv['left'], 0] | max }}" height="{{ cv['bottom'] - cv['top'] }}" fill="url(#hatch)"/>
+        <rect x="{{ cv['band'][0] }}" y="{{ cv['top'] }}" width="{{ [cv['band'][1] - cv['band'][0], 2] | max }}" height="{{ cv['bottom'] - cv['top'] }}" fill="#ABC2EC"/>
+        <line x1="{{ cv['left'] }}" y1="{{ cv['zero_y'] }}" x2="{{ cv['right'] }}" y2="{{ cv['zero_y'] }}" stroke="#7DA1DE" stroke-width="1"/>
+        <line x1="{{ cv['left'] }}" y1="{{ cv['top'] }}" x2="{{ cv['left'] }}" y2="{{ cv['bottom'] }}" stroke="#7DA1DE" stroke-width="1"/>
+        <polyline points="{{ cv['points'] }}" fill="none" stroke="#3F6CC4" stroke-width="2.2"/>
+        <line x1="{{ cv['opt_x'] }}" y1="{{ cv['top'] }}" x2="{{ cv['opt_x'] }}" y2="{{ cv['bottom'] }}" stroke="#27478C" stroke-width="1.3" stroke-dasharray="4 3"/>
+        <line x1="{{ cv['cur_x'] }}" y1="{{ cv['bottom'] - 6 }}" x2="{{ cv['cur_x'] }}" y2="{{ cv['bottom'] }}" stroke="#5E88CC" stroke-width="2"/>
+        <rect x="{{ cv['left'] + 4 }}" y="{{ cv['top'] + 4 }}" width="52" height="16" rx="3" fill="#FFFFFF" stroke="#27478C"/>
+        <text x="{{ cv['left'] + 30 }}" y="{{ cv['top'] + 16 }}" font-size="10" font-weight="700" fill="#27478C" text-anchor="middle">低于保本</text>
+        {% set near_right = cv['opt_x'] > cv['right'] - 40 %}
+        <text x="{{ cv['right'] if near_right else cv['opt_x'] }}" y="{{ cv['top'] - 5 }}" font-size="10" font-weight="700" fill="#27478C" text-anchor="{{ 'end' if near_right else 'middle' }}">最优 {{ cv['labels']['opt'] | money }}</text>
+        <text x="{{ cv['be_x'] }}" y="{{ cv['h'] - 8 }}" font-size="10" fill="#27478C" text-anchor="middle">保本 {{ cv['labels']['be'] | money }}</text>
+        <text x="{{ cv['right'] }}" y="{{ cv['h'] - 8 }}" font-size="10" fill="#3F6CC4" text-anchor="end">{{ cv['labels']['x1'] | money }}</text>
+        <text x="{{ cv['left'] - 6 }}" y="{{ cv['top'] + 8 }}" font-size="10" fill="#3F6CC4" text-anchor="end">日毛利</text>
+      </svg>
+      <p class="foot-note">藏青斜线 = 低于保本；淡蓝色带 = 建议区间（目标值 ≥ 最优的 90%）；虚线 = 最优价；底部短线 = 当前价。</p>
+      {% endif %}
+    </div>
+    <div class="card">
+      <div class="section-title"><h2>为什么建议这个价</h2></div>
+      <ol class="why">{% for t in s['解释'] %}<li>{{ t }}</li>{% endfor %}</ol>
+      {% if s['置信度'] == '低' %}<span class="badge b-short">基于类目经验值，先小幅试</span>{% endif %}
+    </div>
+  </div>
+  <div>
+    <form class="card" method="post" action="/sku/{{ r['商品编号'] }}/inputs">
+      <input type="hidden" name="back" value="{{ back }}">
+      <div class="section-title"><h2>输入与假设</h2><span class="hint">改动只重算这个商品</span></div>
+      {% set iv = inputs %}
+      <div class="kvform">
+        <label for="i-cost">成本价</label><span class="ig"><span class="pre">¥</span><input id="i-cost" type="text" name="成本价" value="{{ iv['成本价'] }}"></span>
+        <label for="i-fee">平台扣点率</label><span class="ig"><input id="i-fee" type="text" name="扣点率" value="{{ iv['扣点率'] }}"><span class="unit">%</span></span>
+        <label for="i-ful">单件履约费</label><span class="ig"><span class="pre">¥</span><input id="i-ful" type="text" name="单件履约费" value="{{ iv['单件履约费'] }}"></span>
+        <label for="i-ret">退货率 × 损耗</label><span class="two"><span class="ig"><input id="i-ret" type="text" name="退货率" value="{{ iv['退货率'] }}"><span class="unit">%</span></span><span class="ig"><input type="text" name="单次退货净损失占比" value="{{ iv['单次退货净损失占比'] }}" aria-label="单次退货净损失占比"><span class="unit">%</span></span></span>
+        <label for="i-m">最低毛利率<br><span class="muted">常规 · 尾货期</span></label><span class="two"><span class="ig"><input id="i-m" type="text" name="最低毛利率" value="{{ iv['最低毛利率'] }}"><span class="unit">%</span></span><span class="ig"><input type="text" name="尾货期最低毛利率" value="{{ iv['尾货期最低毛利率'] }}" aria-label="尾货期最低毛利率"><span class="unit">%</span></span></span>
+        <label for="i-days">目标清仓天数</label><span class="ig"><input id="i-days" type="text" name="目标清仓天数" value="{{ iv['目标清仓天数'] }}"><span class="unit">天</span></span>
+        <label for="i-stage">生命周期</label>
+        <select id="i-stage" name="生命周期">
+          <option value="" {{ 'selected' if not iv['生命周期'] else '' }}>自动（{{ r['生命周期'] if r['生命周期来源'] == '自动' else '按规则' }}）</option>
+          {% for st in stages %}<option value="{{ st }}" {{ 'selected' if iv['生命周期'] == st else '' }}>{{ st }}</option>{% endfor %}
+        </select>
+        <label>竞品价（2～5 个）</label>
+        <span class="comps">{% for x in iv['竞品'] %}<input type="text" name="竞品{{ loop.index }}" value="{{ x }}" aria-label="竞品价 {{ loop.index }}">{% endfor %}</span>
+        <label for="i-adj">弹性微调</label><span class="ig"><input id="i-adj" type="text" name="弹性微调" value="{{ iv['弹性微调'] }}"><span class="unit">%</span></span>
+      </div>
+      <p class="foot-note">弹性 {{ '%.2f' % s['弹性']['生效'] }}（{{ s['弹性']['来源'] }}）。{% if s['竞品']['说明'] %}{{ s['竞品']['说明'] }}。{% endif %}{% if iv['覆盖'] %}本品单独设了：{{ iv['覆盖'] | join('、') }}。{% endif %}</p>
+      <div class="dashed-note">曝光倍数 1.0（默认）。本店没有跨价格力档位的改价记录，预估未计曝光变化，门 0 校准后启用。</div>
+      <div class="row" style="margin-top: 14px">
+        <button class="btn" type="submit" name="action" value="save">保存并重算本品</button>
+        {% if iv['覆盖'] %}<button class="btn" type="submit" name="action" value="reset">恢复店铺默认</button>{% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card actionbar">
+  <form id="adopt-form" method="post" action="/sku/{{ r['商品编号'] }}/adopt" class="row" data-low="{{ s['区间'][0] }}" data-high="{{ s['区间'][2] }}">
+    <input type="hidden" name="back" value="{{ back }}">
+    <label for="adopt-price" class="muted">采纳价</label>
+    <span class="ig"><span class="pre">¥</span><input id="adopt-price" type="text" name="price" value="{{ '%.2f' % s['最优价'] }}" inputmode="decimal"></span>
+    <button id="adopt-btn" class="btn primary lg" type="submit">采纳</button>
+    <button class="btn lg" type="button" data-open="ignore-dialog">忽略（选原因）</button>
+    <span id="adopt-hint" class="muted">工具不会改你的售价。采纳后请到平台后台改价；本版只记录采纳，回看在门 1 之后。</span>
+  </form>
+</div>
+
+<dialog id="ignore-dialog" class="dlg">
+  <form method="post" action="/sku/{{ r['商品编号'] }}/ignore">
+    <input type="hidden" name="back" value="{{ back }}">
+    <h2>忽略这条建议</h2>
+    <p class="muted">选一个原因才能提交。忽略后 7 天内不再提示同向建议。</p>
+    {% for x in reasons %}<label class="radio"><input type="radio" name="reason" value="{{ x }}" required> {{ x }}</label>{% endfor %}
+    <div class="row" style="margin-top: 16px"><button class="btn" type="submit">确认忽略</button><button class="btn" type="button" data-close>取消</button></div>
+  </form>
+</dialog>
+{% endif %}
+
+{% if done == 'adopt' and last %}
+<dialog class="dlg" id="done-dialog">
+  <h2>已记录采纳价 {{ last['price'] | money }}</h2>
+  {% if last['out_of_range'] %}<p><span class="badge b-high">区间外采纳</span> 高于最高建议价 {{ last['high'] | money }}</p>{% endif %}
+  <p class="strong">工具不会改你的售价，请到平台后台改价。</p>
+  <p class="muted">采纳时间 {{ last['at'] | replace('T', ' ') }}。采纳记录可在体检报告页导出。</p>
+  <div class="row"><button class="btn" type="button" data-close>知道了</button><a class="btn" href="{{ back }}">回列表</a></div>
+</dialog>
+{% elif done == 'ignore' %}
+<dialog class="dlg" id="done-dialog">
+  <h2>已忽略</h2><p class="muted">{{ r['状态说明'] }}</p>
+  <div class="row"><button class="btn" type="button" data-close>知道了</button><a class="btn" href="{{ back }}">回列表</a></div>
+</dialog>
+{% endif %}
+<script src="/static/sku.js?v={{ asset_v() }}" defer></script>
+{% endblock %}
